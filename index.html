@@ -1,0 +1,521 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WARBANE</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#090b12;color:white;font-family:Arial,sans-serif;text-align:center}
+h1{color:#ff3939;font-size:42px;letter-spacing:5px;margin:12px}
+button{background:#a51d27;color:white;border:2px solid #ff5555;padding:11px 17px;margin:5px;border-radius:8px;font-weight:bold;cursor:pointer}
+button:hover{background:#e12c39}
+button:disabled{opacity:.4;cursor:not-allowed}
+#gameArea{position:relative;width:min(96vw,900px);margin:10px auto}
+canvas{display:block;width:100%;background:#18251b;border:3px solid #8e252c;border-radius:10px}
+#hud{display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;margin:10px;font-weight:bold}
+#message{color:#ffd45a;min-height:24px;font-weight:bold}
+.panel{display:none;position:absolute;z-index:5;top:50%;left:50%;transform:translate(-50%,-50%);width:min(92%,480px);max-height:85%;overflow:auto;background:#151923;border:3px solid #d33;border-radius:14px;padding:16px;box-shadow:0 0 30px #000}
+.panel h2{color:#ff5555}
+.panel p{margin:8px}
+.option{background:#252c3a;border:1px solid #555;border-radius:8px;padding:10px;margin:7px}
+#menu{max-width:600px;margin:30px auto;padding:20px;background:#151923;border:2px solid #a22;border-radius:15px}
+#menu button{min-width:130px}
+.small{font-size:13px;color:#ccc}
+#controls{max-width:850px;margin:10px auto;color:#ccc;font-size:13px}
+#admin{border-color:#a855ff}
+#admin h2{color:#c78aff}
+</style>
+</head>
+<body>
+
+<h1>WARBANE</h1>
+
+<div id="menu">
+ <h2>SAVAŞA HAZIR MISIN?</h2>
+ <p>Karakterini seç:</p>
+ <button onclick="selectCharacter('warrior')">⚔ Savaşçı</button>
+ <button onclick="selectCharacter('wizard')">🔮 Büyücü</button>
+ <button onclick="selectCharacter('knight')">🛡 Şövalye</button>
+ <p id="characterInfo">Bir karakter seç.</p>
+ <button onclick="startGame()" id="startButton" disabled>OYUNA BAŞLA</button>
+</div>
+
+<div id="gameArea" style="display:none">
+ <div id="hud">
+  <span id="health">❤️ Can: 100</span>
+  <span id="gold">💰 Altın: 0</span>
+  <span id="damage">⚔ Hasar: 20</span>
+  <span id="armor">🛡 Zırh: 0</span>
+  <span id="wave">🌊 Dalga: 1</span>
+ </div>
+
+ <canvas id="game" width="850" height="500"></canvas>
+ <div id="message">Savaş başlıyor!</div>
+
+ <div>
+  <button onclick="openPanel('shop')">🛒 Mağaza</button>
+  <button onclick="openPanel('inventory')">🎒 Envanter</button>
+  <button onclick="openPanel('skills')">🌟 Yetenekler</button>
+  <button onclick="openPanel('mission')">📜 Görev</button>
+  <button onclick="openPanel('map')">🗺 Harita</button>
+ </div>
+
+ <div class="panel" id="shop">
+  <h2>🛒 SAVAŞ MAĞAZASI</h2>
+  <p>Altın: <b id="shopGold">0</b></p>
+  <div class="option">🪓 Balta - 50 altın
+   <button onclick="buy('axe',50)">Satın al</button>
+  </div>
+  <div class="option">⚔ Dev Kılıç - 100 altın
+   <button onclick="buy('greatsword',100)">Satın al</button>
+  </div>
+  <div class="option">🔥 Ateş Kılıcı - 120 altın
+   <button onclick="buy('fire',120)">Satın al</button>
+  </div>
+  <div class="option">⚡ Şimşek - 150 altın
+   <button onclick="buy('lightning',150)">Satın al</button>
+  </div>
+  <div class="option">❄ Buz Büyüsü - 130 altın
+   <button onclick="buy('ice',130)">Satın al</button>
+  </div>
+  <div class="option">⚔ Hasar +10 - 30 altın
+   <button onclick="buyUpgrade('damage',30)">Satın al</button>
+  </div>
+  <div class="option">🛡 Zırh +2 - 35 altın
+   <button onclick="buyUpgrade('armor',35)">Satın al</button>
+  </div>
+  <hr>
+  <button onclick="nextWave()" style="background:#188c42">🔥 SONRAKİ DALGA</button>
+  <button onclick="closePanels()">Kapat</button>
+ </div>
+
+ <div class="panel" id="inventory">
+  <h2>🎒 ENVANTER</h2>
+  <p>Silahını seç:</p>
+  <button onclick="equip('normal')">Normal saldırı</button>
+  <button onclick="equip('axe')">Balta</button>
+  <button onclick="equip('greatsword')">Dev kılıç</button>
+  <button onclick="equip('fire')">Ateş</button>
+  <button onclick="equip('lightning')">Şimşek</button>
+  <button onclick="equip('ice')">Buz</button>
+  <p id="equipped">Kuşanılan: Normal</p>
+  <button onclick="closePanels()">Kapat</button>
+ </div>
+
+ <div class="panel" id="skills">
+  <h2>🌟 YETENEK AĞACI</h2>
+  <div class="option">💪 Güç +15 hasar - 100 altın
+   <button onclick="skill('power',100)">Geliştir</button>
+  </div>
+  <div class="option">❤️ Maksimum can +30 - 100 altın
+   <button onclick="skill('health',100)">Geliştir</button>
+  </div>
+  <div class="option">⚡ Hız +1 - 100 altın
+   <button onclick="skill('speed',100)">Geliştir</button>
+  </div>
+  <div class="option">🔮 Büyü hasarı +30 - 150 altın
+   <button onclick="skill('magic',150)">Geliştir</button>
+  </div>
+  <button onclick="closePanels()">Kapat</button>
+ </div>
+
+ <div class="panel" id="mission">
+  <h2>📜 GÖREV</h2>
+  <p>10 canavar öldür.</p>
+  <p id="missionProgress">İlerleme: 0/10</p>
+  <button onclick="claimMission()">🎁 150 altın ödülünü al</button>
+  <button onclick="closePanels()">Kapat</button>
+ </div>
+
+ <div class="panel" id="map">
+  <h2>🗺 HARİTA SEÇ</h2>
+  <button onclick="changeMap('forest')">🌲 Orman</button>
+  <button onclick="changeMap('hell')">🔥 Cehennem</button>
+  <button onclick="changeMap('ice')">❄ Buz Diyarı</button>
+  <button onclick="closePanels()">Kapat</button>
+ </div>
+
+ <div class="panel" id="admin">
+  <h2>👑 WARBANE ADMIN</h2>
+  <p>Gizli yönetici paneli</p>
+  <button onclick="adminAction('gold')">+500 Altın</button>
+  <button onclick="adminAction('heal')">Canı doldur</button>
+  <button onclick="adminAction('enemies')">+5 Canavar</button>
+  <button onclick="adminAction('damage')">+50 Hasar</button>
+  <button onclick="adminAction('wave')">+1 Dalga</button>
+  <button onclick="adminAction('armor')">Maksimum zırh</button>
+  <button onclick="closePanels()">Kapat</button>
+ </div>
+</div>
+
+<div id="controls" style="display:none">
+ <b>Kontroller:</b> WASD / yön tuşları = hareket | SPACE = saldırı | E = Balta | Q = Dev kılıç | R = Büyü | 5 = Admin
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let selected=null,running=false,paused=true;
+let player,enemies=[],shots=[];
+let wave=1,gold=0,damage=20,armor=0;
+let maxHealth=100,speed=3,magicDamage=30;
+let kills=0,missionClaimed=false;
+let owned={axe:false,greatsword:false,fire:false,lightning:false,ice:false};
+let equipped="normal",map="forest",keys={};
+let attackCooldown=0,axeCooldown=0,swordCooldown=0,magicCooldown=0;
+let bossSpawned=false;
+
+const characters={
+ warrior:{name:"Savaşçı",hp:100,damage:20,speed:3},
+ wizard:{name:"Büyücü",hp:80,damage:30,speed:3.1},
+ knight:{name:"Şövalye",hp:130,damage:17,speed:2.8}
+};
+
+function say(t){document.getElementById("message").textContent=t}
+
+function selectCharacter(type){
+ selected=type;
+ let c=characters[type];
+ document.getElementById("characterInfo").textContent=
+ c.name+" | Can: "+c.hp+" | Hasar: "+c.damage+" | Hız: "+c.speed;
+ document.getElementById("startButton").disabled=false;
+}
+
+function startGame(){
+ if(!selected)return;
+ let c=characters[selected];
+ player={x:canvas.width/2,y:canvas.height/2,hp:c.hp,maxHp:c.hp};
+ maxHealth=c.hp;
+ damage=c.damage;
+ speed=c.speed;
+ gold=0;armor=0;wave=1;kills=0;missionClaimed=false;
+ owned={axe:false,greatsword:false,fire:false,lightning:false,ice:false};
+ equipped="normal";
+ enemies=[];shots=[];
+ running=true;paused=false;
+ document.getElementById("menu").style.display="none";
+ document.getElementById("gameArea").style.display="block";
+ document.getElementById("controls").style.display="block";
+ document.querySelectorAll(".panel").forEach(p=>p.style.display="none");
+ spawnWave();
+ updateHUD();
+}
+
+function spawnEnemy(isBoss=false){
+ let side=Math.floor(Math.random()*4);
+ let x=side===0?0:side===1?canvas.width:Math.random()*canvas.width;
+ let y=side===2?0:side===3?canvas.height:Math.random()*canvas.height;
+ let hp=isBoss?500:35+wave*12;
+ enemies.push({
+  x,y,hp,maxHp:hp,
+  speed:isBoss?0.65:0.75+Math.min(wave*.025,.6),
+  size:isBoss?34:17,
+  damage:isBoss?18:7+Math.floor(wave*.5),
+  boss:isBoss,
+  color:isBoss?"#a000ff":"#8c32c9"
+ });
+}
+
+function spawnWave(){
+ enemies=[];
+ shots=[];
+ bossSpawned=false;
+ if(wave%5===0){
+  spawnEnemy(true);
+  for(let i=0;i<3;i++)spawnEnemy(false);
+  say("⚠ DEV BOSS GELDİ!");
+ }else{
+  for(let i=0;i<wave+1;i++)spawnEnemy(false);
+  say("🔥 DALGA "+wave+" BAŞLADI!");
+ }
+ paused=false;
+ document.querySelectorAll(".panel").forEach(p=>p.style.display="none");
+ updateHUD();
+}
+
+function nextWave(){
+ if(!running)return;
+ if(enemies.length>0){
+  say("Önce bütün canavarları yenmelisin!");
+  return;
+ }
+ wave++;
+ spawnWave();
+ updateHUD();
+}
+
+function updateHUD(){
+ if(!player)return;
+ document.getElementById("health").textContent="❤️ Can: "+Math.max(0,Math.ceil(player.hp))+"/"+maxHealth;
+ document.getElementById("gold").textContent="💰 Altın: "+gold;
+ document.getElementById("damage").textContent="⚔ Hasar: "+damage;
+ document.getElementById("armor").textContent="🛡 Zırh: "+armor;
+ document.getElementById("wave").textContent="🌊 Dalga: "+wave;
+ document.getElementById("shopGold").textContent=gold;
+ document.getElementById("equipped").textContent="Kuşanılan: "+equipped;
+ document.getElementById("missionProgress").textContent="İlerleme: "+Math.min(kills,10)+"/10";
+}
+
+function openPanel(id){
+ if(!running)return;
+ paused=true;
+ document.querySelectorAll(".panel").forEach(p=>p.style.display="none");
+ document.getElementById(id).style.display="block";
+ updateHUD();
+}
+
+function closePanels(){
+ document.querySelectorAll(".panel").forEach(p=>p.style.display="none");
+ if(running)paused=false;
+}
+
+function buy(item,cost){
+ if(gold<cost){say("Yeterli altının yok!");return}
+ if(owned[item]){say("Bu silah zaten sende!");return}
+ gold-=cost;owned[item]=true;
+ say("Satın alındı: "+item);
+ equip(item);
+ updateHUD();
+}
+
+function buyUpgrade(type,cost){
+ if(gold<cost){say("Yeterli altının yok!");return}
+ gold-=cost;
+ if(type==="damage")damage+=10;
+ if(type==="armor")armor=Math.min(armor+2,8);
+ say("Geliştirme satın alındı!");
+ updateHUD();
+}
+
+function equip(item){
+ if(item!=="normal"&&!owned[item]){
+  say("Bu silah henüz sende yok!");
+  return;
+ }
+ equipped=item;
+ updateHUD();
+ say(item+" kuşanıldı!");
+}
+
+function skill(type,cost){
+ if(gold<cost){say("Yeterli altının yok!");return}
+ gold-=cost;
+ if(type==="power")damage+=15;
+ if(type==="health"){maxHealth+=30;player.hp=Math.min(maxHealth,player.hp+30)}
+ if(type==="speed")speed+=1;
+ if(type==="magic")magicDamage+=30;
+ say("Yetenek geliştirildi!");
+ updateHUD();
+}
+
+function claimMission(){
+ if(kills<10){say("Önce 10 canavar öldür!");return}
+ if(missionClaimed){say("Bu görevin ödülünü zaten aldın!");return}
+ missionClaimed=true;gold+=150;
+ say("Görev tamamlandı! +150 altın!");
+ updateHUD();
+}
+
+function changeMap(type){
+ map=type;
+ say("Harita değiştirildi!");
+ closePanels();
+}
+
+function adminAction(type){
+ if(type==="gold")gold+=500;
+ if(type==="heal")player.hp=maxHealth;
+ if(type==="enemies")for(let i=0;i<5;i++)spawnEnemy();
+ if(type==="damage")damage+=50;
+ if(type==="wave"){wave++;spawnWave()}
+ if(type==="armor")armor=8;
+ updateHUD();
+ say("Admin komutu uygulandı!");
+}
+
+function attack(){
+ if(!running||paused||attackCooldown>0)return;
+ attackCooldown=20;
+ let target=nearestEnemy();
+ if(!target)return;
+ let d=Math.hypot(target.x-player.x,target.y-player.y);
+ let amount=damage;
+ if(equipped==="fire")amount+=magicDamage;
+ if(equipped==="lightning")amount+=magicDamage+10;
+ if(equipped==="ice")amount+=magicDamage-5;
+ target.hp-=amount;
+ shots.push({x:player.x,y:player.y,tx:target.x,ty:target.y,color:equipped==="fire"?"#ff5a00":equipped==="ice"?"#75eaff":equipped==="lightning"?"#fff000":"#ffe28a",life:8});
+ if(target.hp<=0)killEnemy(target);
+}
+
+function nearestEnemy(){
+ if(!enemies.length)return null;
+ return enemies.reduce((a,b)=>{
+  let da=Math.hypot(a.x-player.x,a.y-player.y);
+  let db=Math.hypot(b.x-player.x,b.y-player.y);
+  return db<da?b:a;
+ });
+}
+
+function killEnemy(e){
+ if(!enemies.includes(e))return;
+ enemies=enemies.filter(x=>x!==e);
+ kills++;
+ gold+=e.boss?200:10;
+ say(e.boss?"👑 BOSS YENİLDİ! +200 ALTIN":"Canavar yenildi! +10 altın");
+ updateHUD();
+}
+
+function useAxe(){
+ if(!owned.axe||axeCooldown>0||paused)return;
+ axeCooldown=100;
+ enemies.slice().forEach(e=>{
+  if(Math.hypot(e.x-player.x,e.y-player.y)<110){
+   e.hp-=damage*2;
+   if(e.hp<=0)killEnemy(e);
+  }
+ });
+ say("🪓 BALTA SALDIRISI!");
+}
+
+function useGreatSword(){
+ if(!owned.greatsword||swordCooldown>0||paused)return;
+ swordCooldown=250;
+ enemies.slice().forEach(e=>killEnemy(e));
+ say("⚔ DEV KILIÇ! Etraftaki bütün canavarlar yok edildi!");
+}
+
+function useMagic(){
+ if(magicCooldown>0||paused)return;
+ let item=equipped;
+ if(!["fire","lightning","ice"].includes(item)||!owned[item])return;
+ magicCooldown=80;
+ let e=nearestEnemy();
+ if(!e)return;
+ e.hp-=magicDamage*2;
+ if(item==="lightning"){
+  enemies.slice().forEach(other=>{
+   if(other!==e&&Math.hypot(other.x-e.x,other.y-e.y)<120){
+    other.hp-=magicDamage;
+    if(other.hp<=0)killEnemy(other);
+   }
+  });
+ }
+ if(item==="ice")e.speed=Math.max(.2,e.speed*.3);
+ if(e.hp<=0)killEnemy(e);
+ say(item==="fire"?"🔥 ATEŞ!":item==="lightning"?"⚡ ŞİMŞEK!":"❄ BUZ!");
+}
+
+document.addEventListener("keydown",e=>{
+ keys[e.key.toLowerCase()]=true;
+ if(e.key===" "){e.preventDefault();attack()}
+ if(e.key.toLowerCase()==="e")useAxe();
+ if(e.key.toLowerCase()==="q")useGreatSword();
+ if(e.key.toLowerCase()==="r")useMagic();
+ if(e.key==="5")openAdmin();
+});
+document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+function openAdmin(){
+ if(!running||document.getElementById("admin").style.display==="block")return;
+ let pass=prompt("Admin şifresi:");
+ if(pass==="1111")openPanel("admin");
+ else if(pass!==null)say("Yanlış şifre!");
+}
+
+function drawBackground(){
+ if(map==="forest")ctx.fillStyle="#193522";
+ if(map==="hell")ctx.fillStyle="#451b1b";
+ if(map==="ice")ctx.fillStyle="#173447";
+ ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.strokeStyle="rgba(255,255,255,.06)";
+ for(let x=0;x<canvas.width;x+=50){
+  ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();
+ }
+ for(let y=0;y<canvas.height;y+=50){
+  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();
+ }
+}
+
+function drawPlayer(){
+ ctx.fillStyle=selected==="wizard"?"#42a5ff":selected==="knight"?"#c5cbd4":"#e2bd62";
+ ctx.beginPath();ctx.arc(player.x,player.y,16,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="white";
+ ctx.fillRect(player.x-13,player.y-25,26,4);
+}
+
+function drawEnemies(){
+ enemies.forEach(e=>{
+  ctx.fillStyle=e.color;
+  ctx.beginPath();ctx.arc(e.x,e.y,e.size,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#300";
+  ctx.fillRect(e.x-e.size,e.y-e.size-12,e.size*2,6);
+  ctx.fillStyle="#35e35b";
+  ctx.fillRect(e.x-e.size,e.y-e.size-12,e.size*2*Math.max(0,e.hp/e.maxHp),6);
+  if(e.boss){
+   ctx.fillStyle="white";ctx.font="bold 12px Arial";
+   ctx.fillText("BOSS",e.x-17,e.y-e.size-17);
+  }
+ });
+}
+
+function gameLoop(){
+ requestAnimationFrame(gameLoop);
+ if(!running)return;
+ drawBackground();
+ if(!paused){
+  let dx=0,dy=0;
+  if(keys["w"]||keys["arrowup"])dy--;
+  if(keys["s"]||keys["arrowdown"])dy++;
+  if(keys["a"]||keys["arrowleft"])dx--;
+  if(keys["d"]||keys["arrowright"])dx++;
+  let len=Math.hypot(dx,dy)||1;
+  player.x=Math.max(18,Math.min(canvas.width-18,player.x+dx/len*speed));
+  player.y=Math.max(18,Math.min(canvas.height-18,player.y+dy/len*speed));
+
+  if(keys[" "])attack();
+  if(attackCooldown>0)attackCooldown--;
+  if(axeCooldown>0)axeCooldown--;
+  if(swordCooldown>0)swordCooldown--;
+  if(magicCooldown>0)magicCooldown--;
+
+  enemies.slice().forEach(e=>{
+   let dx=player.x-e.x,dy=player.y-e.y;
+   let dist=Math.hypot(dx,dy)||1;
+   if(dist>30){
+    e.x+=dx/dist*e.speed;
+    e.y+=dy/dist*e.speed;
+   }else{
+    if(Math.random()<.025){
+     player.hp-=Math.max(1,e.damage-armor);
+     if(player.hp<=0){
+      player.hp=0;running=false;paused=true;
+      say("☠ ÖLDÜN! Sayfayı yenileyip tekrar başlayabilirsin.");
+      alert("WARBANE'DE YENİLDİN!");
+     }
+     updateHUD();
+    }
+   }
+  });
+
+  shots=shots.filter(s=>s.life-->0);
+  if(enemies.length===0&&!paused){
+   paused=true;
+   say("DALGA TAMAMLANDI! Mağazadan güçlen.");
+   openPanel("shop");
+  }
+ }
+ shots.forEach(s=>{
+  ctx.fillStyle=s.color;
+  ctx.beginPath();ctx.arc(s.tx,s.ty,5,0,Math.PI*2);ctx.fill();
+ });
+ if(player)drawPlayer();
+ drawEnemies();
+}
+gameLoop();
+</script>
+</body>
+</html>
