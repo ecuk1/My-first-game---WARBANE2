@@ -26,6 +26,29 @@ canvas{display:block;width:100%;background:#18251b;border:3px solid #8e252c;bord
 #controls{max-width:850px;margin:10px auto;color:#ccc;font-size:13px}
 #admin{border-color:#a855ff}
 #admin h2{color:#c78aff}
+#adminSearch{width:100%;padding:10px;border-radius:8px;border:1px solid #a855ff;background:#090b12;color:white;margin:8px 0}
+#adminCommands{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;max-height:48vh;overflow:auto;padding:5px}
+#adminCommands button{font-size:12px;padding:8px 5px;margin:1px;background:#38205a;border-color:#a855ff}
+#adminCommands button:hover{background:#63369a}
+#touchControls{display:none;justify-content:space-between;align-items:end;gap:10px;padding:10px;user-select:none;-webkit-user-select:none;touch-action:none}
+.touchMove button,.touchActions button{min-width:58px;min-height:54px;padding:10px;margin:3px;background:#29384b;border:2px solid #8bbcff;border-radius:12px;color:white;font-size:17px;font-weight:bold;touch-action:none}
+.touchMove>div{display:flex;justify-content:center}
+.touchActions{display:flex;flex-wrap:wrap;justify-content:end;max-width:48%}
+.touchActions button{font-size:14px;min-width:76px}
+@media (pointer:coarse),(max-width:900px){
+ #touchControls{display:flex !important}
+ #controls{display:none !important}
+ #gameArea{width:98vw}
+ canvas{width:100%;height:auto;touch-action:none}
+}
+@media (max-width:480px){
+ #touchControls{gap:4px;padding:5px}
+ .touchMove button{min-width:48px;min-height:48px}
+ .touchActions{max-width:52%}
+ .touchActions button{min-width:66px;min-height:48px;font-size:12px;padding:6px}
+ #hud{font-size:12px}
+}
+.adminHint{font-size:12px;color:#d7c2ff}
 </style>
 </head>
 <body>
@@ -49,9 +72,23 @@ canvas{display:block;width:100%;background:#18251b;border:3px solid #8e252c;bord
   <span id="damage">⚔ Hasar: 20</span>
   <span id="armor">🛡 Zırh: 0</span>
   <span id="wave">🌊 Dalga: 1</span>
+  <span id="level">⭐ Seviye: 1</span>
+  <span id="xp">✨ XP: 0/50</span>
+  <span id="potions">🧪 İksir: 3</span>
  </div>
 
  <canvas id="game" width="850" height="500"></canvas>
+ <div id="touchControls" aria-label="Dokunmatik oyun kontrolleri">
+  <div class="touchMove">
+   <button data-key="arrowup">▲</button>
+   <div><button data-key="arrowleft">◀</button><button data-key="arrowdown">▼</button><button data-key="arrowright">▶</button></div>
+  </div>
+  <div class="touchActions">
+   <button data-action="attack">⚔ Saldır</button>
+   <button data-action="dash">💨 Atıl</button>
+   <button data-action="potion">🧪 İksir</button>
+  </div>
+ </div>
  <div id="message">Savaş başlıyor!</div>
 
  <div>
@@ -140,6 +177,10 @@ canvas{display:block;width:100%;background:#18251b;border:3px solid #8e252c;bord
  <div class="panel" id="admin">
   <h2>👑 WARBANE ADMIN</h2>
   <p>Gizli yönetici paneli</p>
+  <p class="adminHint">130+ komut • Arama kutusundan komut bulabilirsin</p>
+  <input id="adminSearch" type="search" placeholder="Komut ara..." oninput="filterAdminCommands()">
+  <div id="adminCommands"></div>
+  <hr>
   <button onclick="adminAction('gold')">+500 Altın</button>
   <button onclick="adminAction('heal')">Canı doldur</button>
   <button onclick="adminAction('enemies')">+5 Canavar</button>
@@ -151,7 +192,18 @@ canvas{display:block;width:100%;background:#18251b;border:3px solid #8e252c;bord
 </div>
 
 <div id="controls" style="display:none">
- <b>Kontroller:</b> WASD / yön tuşları = hareket | SPACE = saldırı | E = Balta | Q = Dev kılıç | R = Büyü | 5 = Admin
+ <b>Kontroller:</b> WASD / yön tuşları = hareket | SPACE = saldırı | SHIFT = Atıl | H = İksir | E = Balta | Q = Dev kılıç | R = Büyü | 5 = Admin
+</div>
+
+<div id="adminLogin" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px">
+ <div style="width:min(92vw,360px);background:#171323;border:3px solid #a855ff;border-radius:16px;padding:22px;box-shadow:0 0 35px #7e22ce">
+  <h2 style="color:#d8b4fe">🔐 WARBANE ADMIN GİRİŞİ</h2>
+  <p>Admin şifresini gir:</p>
+  <input id="adminPassword" type="password" inputmode="numeric" maxlength="8" placeholder="Şifre" style="font-size:22px;text-align:center;padding:10px;width:90%;border-radius:8px">
+  <p id="adminLoginMessage" style="color:#ff7777;min-height:20px"></p>
+  <button onclick="checkAdminPassword()">GİRİŞ</button>
+  <button onclick="closeAdminLogin()" style="background:#555;border-color:#888">İPTAL</button>
+ </div>
 </div>
 
 <script>
@@ -167,6 +219,8 @@ let owned={axe:false,greatsword:false,fire:false,lightning:false,ice:false};
 let equipped="normal",map="forest",keys={};
 let attackCooldown=0,axeCooldown=0,swordCooldown=0,magicCooldown=0;
 let bossSpawned=false;
+let playerLevel=1,playerXP=0,xpNext=50,potions=3,dashCooldown=0,dashTime=0,visualEffects=[];
+let adminGodMode=false,adminFreeze=false,adminOneHit=false,adminDoubleGold=false,adminFastAttack=false;
 
 const characters={
  warrior:{name:"Savaşçı",hp:100,damage:20,speed:3},
@@ -192,6 +246,7 @@ function startGame(){
  damage=c.damage;
  speed=c.speed;
  gold=0;armor=0;wave=1;kills=0;missionClaimed=false;
+ playerLevel=1;playerXP=0;xpNext=50;potions=3;dashCooldown=0;dashTime=0;visualEffects=[];
  owned={axe:false,greatsword:false,fire:false,lightning:false,ice:false};
  equipped="normal";
  enemies=[];shots=[];
@@ -209,13 +264,16 @@ function spawnEnemy(isBoss=false){
  let x=side===0?0:side===1?canvas.width:Math.random()*canvas.width;
  let y=side===2?0:side===3?canvas.height:Math.random()*canvas.height;
  let hp=isBoss?500:35+wave*12;
+ const kinds=["zombie","demon","skeleton","brute"];
+ const kind=isBoss?"boss":kinds[Math.floor(Math.random()*kinds.length)];
  enemies.push({
   x,y,hp,maxHp:hp,
   speed:isBoss?0.65:0.75+Math.min(wave*.025,.6),
   size:isBoss?34:17,
   damage:isBoss?18:7+Math.floor(wave*.5),
   boss:isBoss,
-  color:isBoss?"#a000ff":"#8c32c9"
+  kind,
+  color:kind==="zombie"?"#579b45":kind==="skeleton"?"#d8d0b5":kind==="boss"?"#a000ff":kind==="brute"?"#b06a28":"#a52d42"
  });
 }
 
@@ -254,6 +312,9 @@ function updateHUD(){
  document.getElementById("damage").textContent="⚔ Hasar: "+damage;
  document.getElementById("armor").textContent="🛡 Zırh: "+armor;
  document.getElementById("wave").textContent="🌊 Dalga: "+wave;
+ document.getElementById("level").textContent="⭐ Seviye: "+playerLevel;
+ document.getElementById("xp").textContent="✨ XP: "+playerXP+"/"+xpNext;
+ document.getElementById("potions").textContent="🧪 İksir: "+potions;
  document.getElementById("shopGold").textContent=gold;
  document.getElementById("equipped").textContent="Kuşanılan: "+equipped;
  document.getElementById("missionProgress").textContent="İlerleme: "+Math.min(kills,10)+"/10";
@@ -336,9 +397,121 @@ function adminAction(type){
  say("Admin komutu uygulandı!");
 }
 
+// 130+ özel yönetici komutu: eski oyun sistemini değiştirmeden eklenir.
+const adminCommandGroups=[
+ {key:"gold",title:"Altın",values:[100,250,500,1000,2500,5000,10000,25000,50000,100000]},
+ {key:"heal",title:"Can doldurma",values:[10,25,50,75,100,150,250,500,1000,"FULL"]},
+ {key:"damage",title:"Hasar artırma",values:[5,10,20,30,50,75,100,250,500,1000]},
+ {key:"armor",title:"Zırh artırma",values:[1,2,3,4,5,6,7,8,10,20]},
+ {key:"speed",title:"Hız artırma",values:[0.5,1,1.5,2,3,4,5,7,10,15]},
+ {key:"maxhp",title:"Maksimum can",values:[25,50,100,150,250,500,750,1000,2500,5000]},
+ {key:"spawn",title:"Canavar çağır",values:[1,2,3,5,10,15,20,30,50,100]},
+ {key:"boss",title:"Boss çağır",values:[1,2,3,4,5,6,7,8,9,10]},
+ {key:"wave",title:"Dalga atlat",values:[1,2,3,4,5,10,15,20,25,50]},
+ {key:"magic",title:"Büyü hasarı",values:[10,25,50,75,100,150,250,500,1000,2500]},
+ {key:"kill",title:"Canavar temizle",values:["TÜMÜ","EN YAKIN","BOSS","EN UZAK","YARISI","RASTGELE","10 TANE","20 TANE","50 TANE","BOSS + TÜMÜ"]},
+ {key:"weapon",title:"Silah aç",values:["BALTA","DEV KILIÇ","ATEŞ","ŞİMŞEK","BUZ","HEPSİ","NORMAL","ATEŞ KUŞAN","ŞİMŞEK KUŞAN","BUZ KUŞAN"]},
+ {key:"power",title:"Özel güçler",values:["TANRI MODU","DÜŞMANLARI DONDUR","TEK VURUŞ","ÇİFT ALTIN","HIZLI SALDIRI","GÜÇLERİ KAPAT","HARİTA ORMAN","HARİTA CEHENNEM","HARİTA BUZ","CAN +1000"]}
+];
+function buildAdminCommands(){
+ const root=document.getElementById("adminCommands");
+ if(!root||root.dataset.ready)return;
+ root.dataset.ready="1";
+ adminCommandGroups.forEach(group=>group.values.forEach((value,index)=>{
+  const id=group.key+":"+index;
+  const b=document.createElement("button");
+  b.type="button";
+  b.textContent=group.title+" • "+value;
+  b.dataset.search=(group.title+" "+value).toLocaleLowerCase("tr-TR");
+  b.onclick=()=>runAdminCommand(group.key,index,value);
+  root.appendChild(b);
+ }));
+}
+function filterAdminCommands(){
+ const q=(document.getElementById("adminSearch")?.value||"").toLocaleLowerCase("tr-TR");
+ document.querySelectorAll("#adminCommands button").forEach(b=>b.style.display=b.dataset.search.includes(q)?"block":"none");
+}
+function runAdminCommand(key,index,value){
+ if(!running||!player){say("Önce oyuna başlamalısın!");return;}
+ if(key==="gold")gold+=value;
+ if(key==="heal")player.hp=value==="FULL"?maxHealth:Math.min(maxHealth,player.hp+value);
+ if(key==="damage")damage+=value;
+ if(key==="armor")armor=Math.min(armor+value,1000);
+ if(key==="speed")speed=Math.min(speed+value,30);
+ if(key==="maxhp"){maxHealth+=value;player.maxHp=maxHealth;player.hp+=value;}
+ if(key==="spawn"){for(let i=0;i<value;i++)spawnEnemy(false);}
+ if(key==="boss"){for(let i=0;i<value;i++)spawnEnemy(true);say("👑 BOSS ORDUSU ÇAĞRILDI!");}
+ if(key==="wave"){wave+=value;spawnWave();}
+ if(key==="magic")magicDamage+=value;
+ if(key==="kill"){
+  const list=enemies.slice();
+  if(index===0||index===9)list.forEach(e=>killEnemy(e));
+  else if(index===1){const e=nearestEnemy();if(e)killEnemy(e);}
+  else if(index===2||index===9){list.filter(e=>e.boss).forEach(e=>killEnemy(e));}
+  else if(index===3){list.sort((a,b)=>Math.hypot(b.x-player.x,b.y-player.y)-Math.hypot(a.x-player.x,a.y-player.y))[0]&&killEnemy(list.sort((a,b)=>Math.hypot(b.x-player.x,b.y-player.y)-Math.hypot(a.x-player.x,a.y-player.y))[0]);}
+  else if(index===4)list.slice(0,Math.ceil(list.length/2)).forEach(e=>killEnemy(e));
+  else if(index===5&&list.length)killEnemy(list[Math.floor(Math.random()*list.length)]);
+  else if(index>=6)list.slice(0,[10,20,50][index-6]).forEach(e=>killEnemy(e));
+ }
+ if(key==="weapon"){
+  const names=["axe","greatsword","fire","lightning","ice"];
+  if(index<5){owned[names[index]]=true;equip(names[index]);}
+  if(index===5)names.forEach(n=>owned[n]=true);
+  if(index===6)equip("normal");
+  if(index===7){owned.fire=true;equip("fire");}
+  if(index===8){owned.lightning=true;equip("lightning");}
+  if(index===9){owned.ice=true;equip("ice");}
+ }
+ if(key==="power"){
+  if(index===0)adminGodMode=!adminGodMode;
+  if(index===1)adminFreeze=!adminFreeze;
+  if(index===2)adminOneHit=!adminOneHit;
+  if(index===3)adminDoubleGold=!adminDoubleGold;
+  if(index===4)adminFastAttack=!adminFastAttack;
+  if(index===5){adminGodMode=adminFreeze=adminOneHit=adminDoubleGold=adminFastAttack=false;}
+  if(index===6)changeMap("forest");
+  if(index===7)changeMap("hell");
+  if(index===8)changeMap("ice");
+  if(index===9){maxHealth+=1000;player.maxHp=maxHealth;player.hp+=1000;}
+ }
+ updateHUD();
+ if(key==="power")say("👑 Güç: "+value+" | Durum: "+(index<5?(index===0?adminGodMode:index===1?adminFreeze:index===2?adminOneHit:index===3?adminDoubleGold:adminFastAttack):"Uygulandı"));
+ else say("👑 Admin komutu uygulandı: "+value);
+}
+
+function dash(){
+ if(!running||paused||dashCooldown>0)return;
+ let dx=0,dy=0;
+ if(keys["w"]||keys["arrowup"])dy--;
+ if(keys["s"]||keys["arrowdown"])dy++;
+ if(keys["a"]||keys["arrowleft"])dx--;
+ if(keys["d"]||keys["arrowright"])dx++;
+ const len=Math.hypot(dx,dy)||1;
+ player.x=Math.max(20,Math.min(canvas.width-20,player.x+dx/len*105));
+ player.y=Math.max(20,Math.min(canvas.height-20,player.y+dy/len*105));
+ dashCooldown=150;dashTime=12;
+ visualEffects.push({x:player.x,y:player.y,life:18,max:18,text:"💨",color:"#8eeaff"});
+}
+function usePotion(){
+ if(!running||paused)return;
+ if(potions<=0){say("İksirin kalmadı!");return;}
+ if(player.hp>=maxHealth){say("Canın zaten dolu!");return;}
+ potions--;player.hp=Math.min(maxHealth,player.hp+45);
+ visualEffects.push({x:player.x,y:player.y-28,life:32,max:32,text:"+45 CAN",color:"#65ff91"});
+ updateHUD();say("🧪 İKSİR KULLANILDI! +45 CAN");
+}
+function drawEffects(){
+ visualEffects=visualEffects.filter(f=>f.life-->0);
+ visualEffects.forEach(f=>{
+  ctx.save();ctx.globalAlpha=Math.max(0,f.life/f.max);
+  ctx.fillStyle=f.color;ctx.font="bold 16px Arial";ctx.textAlign="center";
+  ctx.fillText(f.text,f.x,f.y-(1-f.life/f.max)*28);ctx.restore();
+ });
+}
+
 function attack(){
  if(!running||paused||attackCooldown>0)return;
- attackCooldown=20;
+ attackCooldown=adminFastAttack?1:20;
  let target=nearestEnemy();
  if(!target)return;
  let d=Math.hypot(target.x-player.x,target.y-player.y);
@@ -346,7 +519,7 @@ function attack(){
  if(equipped==="fire")amount+=magicDamage;
  if(equipped==="lightning")amount+=magicDamage+10;
  if(equipped==="ice")amount+=magicDamage-5;
- target.hp-=amount;
+ target.hp-=adminOneHit?target.hp:amount;
  shots.push({x:player.x,y:player.y,tx:target.x,ty:target.y,color:equipped==="fire"?"#ff5a00":equipped==="ice"?"#75eaff":equipped==="lightning"?"#fff000":"#ffe28a",life:8});
  if(target.hp<=0)killEnemy(target);
 }
@@ -364,7 +537,16 @@ function killEnemy(e){
  if(!enemies.includes(e))return;
  enemies=enemies.filter(x=>x!==e);
  kills++;
- gold+=e.boss?200:10;
+ const gained=e.boss?100:15;
+ playerXP+=gained;
+ visualEffects.push({x:e.x,y:e.y,life:28,max:28,text:"+"+gained+" XP",color:"#ffe66d"});
+ while(playerXP>=xpNext){
+  playerXP-=xpNext;playerLevel++;xpNext=Math.floor(xpNext*1.35);
+  maxHealth+=12;player.maxHp=maxHealth;player.hp=Math.min(maxHealth,player.hp+25);
+  damage+=4;speed=Math.min(speed+.12,6);
+  say("⭐ SEVİYE "+playerLevel+"! Can +25, hasar +4, hız arttı!");
+ }
+ gold+=(e.boss?200:10)*(adminDoubleGold?2:1);
  say(e.boss?"👑 BOSS YENİLDİ! +200 ALTIN":"Canavar yenildi! +10 altın");
  updateHUD();
 }
@@ -410,21 +592,59 @@ function useMagic(){
 }
 
 document.addEventListener("keydown",e=>{
+ const tag=(e.target&&e.target.tagName||"").toLowerCase();
+ const typing=tag==="input"||tag==="textarea";
+ if((e.code==="Digit5"||e.code==="Numpad5")&&!typing){e.preventDefault();openAdmin();return;}
+ if(typing)return;
  keys[e.key.toLowerCase()]=true;
  if(e.key===" "){e.preventDefault();attack()}
  if(e.key.toLowerCase()==="e")useAxe();
  if(e.key.toLowerCase()==="q")useGreatSword();
  if(e.key.toLowerCase()==="r")useMagic();
- if(e.key==="5")openAdmin();
+ if(e.key==="Shift")dash();
+ if(e.key.toLowerCase()==="h")usePotion();
 });
 document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
 function openAdmin(){
  if(!running||document.getElementById("admin").style.display==="block")return;
- let pass=prompt("Admin şifresi:");
- if(pass==="1111")openPanel("admin");
- else if(pass!==null)say("Yanlış şifre!");
+ const login=document.getElementById("adminLogin");
+ login.style.display="flex";
+ document.getElementById("adminPassword").value="";
+ document.getElementById("adminLoginMessage").textContent="";
+ setTimeout(()=>document.getElementById("adminPassword").focus(),50);
 }
+function checkAdminPassword(){
+ const pass=document.getElementById("adminPassword").value;
+ if(pass==="1111"){
+  document.getElementById("adminLogin").style.display="none";
+  buildAdminCommands();
+  openPanel("admin");
+ }else{
+  document.getElementById("adminLoginMessage").textContent="Yanlış şifre! Tekrar dene.";
+  document.getElementById("adminPassword").select();
+ }
+}
+function closeAdminLogin(){document.getElementById("adminLogin").style.display="none";}
+document.getElementById("adminPassword").addEventListener("keydown",e=>{if(e.key==="Enter")checkAdminPassword();if(e.key==="Escape")closeAdminLogin();});
+
+// Telefon/tablet dokunmatik kontrolleri
+document.querySelectorAll("#touchControls [data-key]").forEach(btn=>{
+ const k=btn.dataset.key;
+ const down=e=>{e.preventDefault();keys[k]=true;};
+ const up=e=>{e.preventDefault();keys[k]=false;};
+ btn.addEventListener("pointerdown",down);
+ ["pointerup","pointercancel","pointerleave"].forEach(ev=>btn.addEventListener(ev,up));
+});
+document.querySelectorAll("#touchControls [data-action]").forEach(btn=>{
+ btn.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  const a=btn.dataset.action;
+  if(a==="attack")attack();
+  if(a==="dash")dash();
+  if(a==="potion")usePotion();
+ });
+});
 
 function drawBackground(){
  if(map==="forest")ctx.fillStyle="#193522";
@@ -440,25 +660,97 @@ function drawBackground(){
  }
 }
 
+let playerAnimation=0;
 function drawPlayer(){
- ctx.fillStyle=selected==="wizard"?"#42a5ff":selected==="knight"?"#c5cbd4":"#e2bd62";
- ctx.beginPath();ctx.arc(player.x,player.y,16,0,Math.PI*2);ctx.fill();
- ctx.fillStyle="white";
- ctx.fillRect(player.x-13,player.y-25,26,4);
+ if(!player)return;
+ playerAnimation+=0.11;
+ const bob=Math.sin(playerAnimation)*1.8;
+ const px=player.x, py=player.y+bob;
+ const target=nearestEnemy();
+ const face=target?Math.atan2(target.y-player.y,target.x-player.x):0;
+ const base=selected==="wizard"?"#278bdc":selected==="knight"?"#aeb8c7":"#b87932";
+ const dark=selected==="wizard"?"#123d78":selected==="knight"?"#39485e":"#57351c";
+ const light=selected==="wizard"?"#a8e4ff":selected==="knight"?"#f1f6ff":"#ffe0a0";
+ ctx.save();
+ // Ground shadow gives the character a raised, 3D look.
+ ctx.fillStyle="rgba(0,0,0,.38)";ctx.beginPath();ctx.ellipse(px+3,player.y+13,19,8,0,0,Math.PI*2);ctx.fill();
+ ctx.translate(px,py);
+ // Legs and boots
+ const legGrad=ctx.createLinearGradient(-10,0,10,0);legGrad.addColorStop(0,dark);legGrad.addColorStop(.5,base);legGrad.addColorStop(1,"#171923");
+ ctx.fillStyle=legGrad;ctx.beginPath();ctx.roundRect(-10,4,8,15,4);ctx.roundRect(2,4,8,15,4);ctx.fill();
+ ctx.fillStyle="#17151a";ctx.beginPath();ctx.ellipse(-6,19,7,4,-.12,0,Math.PI*2);ctx.ellipse(6,19,7,4,.12,0,Math.PI*2);ctx.fill();
+ // Body / armor with layered highlights
+ const body=ctx.createLinearGradient(-14,-10,14,10);body.addColorStop(0,light);body.addColorStop(.28,base);body.addColorStop(.72,dark);body.addColorStop(1,"#11131a");
+ ctx.fillStyle=body;ctx.beginPath();ctx.moveTo(-12,-12);ctx.quadraticCurveTo(-15,-3,-10,9);ctx.lineTo(10,9);ctx.quadraticCurveTo(15,-3,12,-12);ctx.closePath();ctx.fill();
+ ctx.strokeStyle="rgba(255,255,255,.55)";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-8,-9);ctx.quadraticCurveTo(-4,-4,-5,5);ctx.stroke();
+ // Shoulder plates
+ const plate=ctx.createLinearGradient(-15,-10,15,0);plate.addColorStop(0,"#f8e7b5");plate.addColorStop(.4,base);plate.addColorStop(1,dark);
+ ctx.fillStyle=plate;ctx.beginPath();ctx.ellipse(-12,-8,7,5,-.3,0,Math.PI*2);ctx.ellipse(12,-8,7,5,.3,0,Math.PI*2);ctx.fill();
+ // Belt and chest emblem
+ ctx.fillStyle="#e3b94f";ctx.fillRect(-9,3,18,3);
+ ctx.fillStyle=selected==="wizard"?"#9af5ff":"#ffdf73";ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(4,-3);ctx.lineTo(0,2);ctx.lineTo(-4,-3);ctx.closePath();ctx.fill();
+ // Head and face
+ const skin=ctx.createRadialGradient(-4,-19,1,0,-17,10);skin.addColorStop(0,"#ffe0b5");skin.addColorStop(1,"#9c6245");
+ ctx.fillStyle=skin;ctx.beginPath();ctx.arc(0,-17,8,0,Math.PI*2);ctx.fill();
+ // Helmet / hood
+ if(selected==="wizard"){
+  ctx.fillStyle="#163c80";ctx.beginPath();ctx.moveTo(-10,-17);ctx.lineTo(0,-34);ctx.lineTo(11,-17);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#76dcff";ctx.beginPath();ctx.arc(0,-18,4,Math.PI,Math.PI*2);ctx.fill();
+ }else{
+  ctx.fillStyle=selected==="knight"?"#dce5f2":"#70401f";ctx.beginPath();ctx.arc(0,-19,9,Math.PI,Math.PI*2);ctx.lineTo(9,-16);ctx.lineTo(-9,-16);ctx.closePath();ctx.fill();
+  if(selected==="knight"){ctx.fillStyle="#29364b";ctx.fillRect(-8,-19,16,4);ctx.fillStyle="#f8d46a";ctx.fillRect(-2,-19,4,3);}
+ }
+ // Weapon held toward the nearest enemy
+ ctx.save();ctx.rotate(face);
+ ctx.strokeStyle="#d6dce7";ctx.lineWidth=3;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(7,-2);ctx.lineTo(18,-13);ctx.stroke();
+ ctx.strokeStyle="#f4c64e";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(8,-2);ctx.lineTo(12,-6);ctx.stroke();
+ ctx.fillStyle="#fff3c2";ctx.beginPath();ctx.moveTo(18,-13);ctx.lineTo(27,-23);ctx.lineTo(22,-9);ctx.closePath();ctx.fill();
+ ctx.restore();
+ // Extra armor glow as armor level rises
+ if(armor>0){ctx.strokeStyle="rgba(91,205,255,"+Math.min(.75,.2+armor*.05)+")";ctx.lineWidth=2+Math.min(4,armor*.35);ctx.beginPath();ctx.ellipse(0,-3,17,24,0,0,Math.PI*2);ctx.stroke();}
+ ctx.restore();
+ // Health bar above the character
+ ctx.fillStyle="#240b0b";ctx.fillRect(px-16,player.y-39,32,5);
+ ctx.fillStyle="#45ed75";ctx.fillRect(px-16,player.y-39,32*Math.max(0,player.hp/player.maxHp),5);
 }
 
+let monsterAnimation=0;
 function drawEnemies(){
+ monsterAnimation+=0.08;
  enemies.forEach(e=>{
-  ctx.fillStyle=e.color;
-  ctx.beginPath();ctx.arc(e.x,e.y,e.size,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle="#300";
-  ctx.fillRect(e.x-e.size,e.y-e.size-12,e.size*2,6);
-  ctx.fillStyle="#35e35b";
-  ctx.fillRect(e.x-e.size,e.y-e.size-12,e.size*2*Math.max(0,e.hp/e.maxHp),6);
-  if(e.boss){
-   ctx.fillStyle="white";ctx.font="bold 12px Arial";
-   ctx.fillText("BOSS",e.x-17,e.y-e.size-17);
+  const s=e.size;
+  const bob=Math.sin(monsterAnimation+(e.x+e.y)*0.02)*1.8;
+  const y=e.y+bob;
+  ctx.save();
+  ctx.shadowColor="rgba(0,0,0,.65)";ctx.shadowBlur=10;ctx.shadowOffsetX=4;ctx.shadowOffsetY=6;
+  const body=ctx.createRadialGradient(e.x-s*.35,y-s*.45,2,e.x,y,s*1.25);
+  if(e.kind==="zombie"){
+   body.addColorStop(0,"#b7ef83");body.addColorStop(.45,"#659e48");body.addColorStop(1,"#203d25");
+  }else if(e.kind==="skeleton"){
+   body.addColorStop(0,"#fff6d8");body.addColorStop(.55,"#c9bd9e");body.addColorStop(1,"#665c4d");
+  }else if(e.kind==="brute"){
+   body.addColorStop(0,"#ffd08a");body.addColorStop(.45,"#b06a28");body.addColorStop(1,"#4a2610");
+  }else if(e.kind==="boss"){
+   body.addColorStop(0,"#ff83ff");body.addColorStop(.45,"#8b25c7");body.addColorStop(1,"#26083e");
+  }else{
+   body.addColorStop(0,"#ff9b78");body.addColorStop(.45,"#b83240");body.addColorStop(1,"#45101c");
   }
+  ctx.fillStyle=body;ctx.beginPath();ctx.ellipse(e.x,y,s*.83,s*1.08,0,0,Math.PI*2);ctx.fill();
+  ctx.shadowColor="transparent";
+  ctx.strokeStyle=e.kind==="skeleton"?"#e7dcbf":e.kind==="zombie"?"#477c39":"#641b2a";
+  ctx.lineWidth=Math.max(4,s*.32);ctx.lineCap="round";
+  ctx.beginPath();ctx.moveTo(e.x-s*.55,y);ctx.lineTo(e.x-s*1.05,y+s*.55);ctx.moveTo(e.x+s*.55,y);ctx.lineTo(e.x+s*1.05,y+s*.55);ctx.stroke();
+  ctx.fillStyle=e.kind==="skeleton"?"#d8cfb5":e.kind==="zombie"?"#497d3b":"#4b1024";
+  ctx.beginPath();ctx.moveTo(e.x-s*.62,y-s*.58);ctx.lineTo(e.x-s*.95,y-s*1.35);ctx.lineTo(e.x-s*.18,y-s*.82);ctx.moveTo(e.x+s*.62,y-s*.58);ctx.lineTo(e.x+s*.95,y-s*1.35);ctx.lineTo(e.x+s*.18,y-s*.82);ctx.closePath();ctx.fill();
+  ctx.fillStyle=e.kind==="boss"?"#fff200":"#ffefbd";
+  ctx.beginPath();ctx.ellipse(e.x-s*.3,y-s*.18,s*.15,s*.2,0,0,Math.PI*2);ctx.ellipse(e.x+s*.3,y-s*.18,s*.15,s*.2,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#180b0b";ctx.beginPath();ctx.arc(e.x-s*.3,y-s*.18,s*.07,0,Math.PI*2);ctx.arc(e.x+s*.3,y-s*.18,s*.07,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="#210b0b";ctx.lineWidth=Math.max(2,s*.12);ctx.beginPath();ctx.moveTo(e.x-s*.25,y+s*.38);ctx.lineTo(e.x+s*.25,y+s*.38);ctx.stroke();
+  ctx.strokeStyle="rgba(255,255,255,.28)";ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(e.x-s*.12,y-s*.12,s*.65,s*.88,-.2,Math.PI*1.1,Math.PI*1.8);ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle="#300";ctx.fillRect(e.x-s,y-s-15,s*2,6);
+  ctx.fillStyle="#35e35b";ctx.fillRect(e.x-s,y-s-15,s*2*Math.max(0,e.hp/e.maxHp),6);
+  if(e.boss){ctx.fillStyle="white";ctx.font="bold 12px Arial";ctx.fillText("BOSS",e.x-17,y-s-20);}
  });
 }
 
@@ -481,16 +773,18 @@ function gameLoop(){
   if(axeCooldown>0)axeCooldown--;
   if(swordCooldown>0)swordCooldown--;
   if(magicCooldown>0)magicCooldown--;
+  if(dashCooldown>0)dashCooldown--;
+  if(dashTime>0)dashTime--;
 
   enemies.slice().forEach(e=>{
    let dx=player.x-e.x,dy=player.y-e.y;
    let dist=Math.hypot(dx,dy)||1;
-   if(dist>30){
+   if(dist>30&&!adminFreeze){
     e.x+=dx/dist*e.speed;
     e.y+=dy/dist*e.speed;
    }else{
     if(Math.random()<.025){
-     player.hp-=Math.max(1,e.damage-armor);
+     if(!adminGodMode)player.hp-=Math.max(1,e.damage-armor);
      if(player.hp<=0){
       player.hp=0;running=false;paused=true;
       say("☠ ÖLDÜN! Sayfayı yenileyip tekrar başlayabilirsin.");
@@ -514,6 +808,7 @@ function gameLoop(){
  });
  if(player)drawPlayer();
  drawEnemies();
+ drawEffects();
 }
 gameLoop();
 </script>
